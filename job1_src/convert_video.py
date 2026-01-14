@@ -5,14 +5,13 @@ import time
 import json
 import subprocess
 import whisper
-from utils.common import *
 
 
 
-def get_video_info(path: str):
+def get_video_info(video_path: str):
     """Extracts key audio and video parameters from a file or folder using ffprobe."""
-
-    video_path = helper.get_video_path(path)
+    start_time = time.time()
+    
     cmd = [
         "ffprobe",
         "-v", "error",
@@ -55,42 +54,8 @@ def get_video_info(path: str):
     print("\nAudio Info:")
     for k, v in audio_info.items():
         print(f"  {k}: {v}")
-
-
-def crop_video_ffmpeg(video_filepath: str, start_time: float, end_time: float, output_path=None):
-    """
-    Crop a video using ffmpeg from start_time to end_time (in seconds).
-
-    Parameters:
-        video_filepath (str): Path to the input video file.
-        start_time (float): Start time in seconds.
-        end_time (float): End time in seconds.
-        output_path (str): Output filepath to save the cropped video.
-    """
-    if end_time <= start_time:
-        raise ValueError("end_time must be greater than start_time")
     
-    duration = end_time - start_time
-    if output_path is None:
-        base, _ = os.path.splitext(video_filepath)
-        output_path = f"{base}_{duration//60}min.mp4"
-
-    command = [
-        'ffmpeg',
-        '-y',                     # Overwrite output file if it exists
-        '-ss', str(start_time),  # Start time
-        '-i', video_filepath,        # Input file
-        '-t', str(duration),     # Duration of the clip
-        '-c', 'copy',            # Copy codec (no re-encoding)
-        output_path
-    ]
-
-    try:
-        subprocess.run(command, check=True)
-        print(f"Cropped video saved to: {output_path}")
-    except subprocess.CalledProcessError as e:
-        print("Error cropping video:", e)
-    return output_path
+    print(f"⏱️  get_video_info completed in {time.time() - start_time:.2f}s")
 
 
 def convert_video_to_h264(
@@ -118,6 +83,8 @@ def convert_video_to_h264(
         output_path (str): Optional output directory.
 
     """
+    start_time = time.time()
+    
     if not os.path.exists(video_filepath):
         raise FileNotFoundError(f"Input file not found: {video_filepath}")
 
@@ -163,6 +130,7 @@ def convert_video_to_h264(
     print(" ".join(cmd))
     subprocess.run(cmd, check=True)
     print(f"✅ Conversion complete: {output_path}")
+    print(f"⏱️  convert_video_to_h264 completed in {time.time() - start_time:.2f}s")
     return output_path
 
 
@@ -178,6 +146,8 @@ def extract_mp3_from_video(video_path, bitrate='64k', output_path=None):
     Returns:
         str: Path to the extracted MP3 file.
     """
+    start_time = time.time()
+    
     if output_path is None:
         base, _ = os.path.splitext(video_path)
         output_path = f"{base}.mp3"
@@ -193,6 +163,8 @@ def extract_mp3_from_video(video_path, bitrate='64k', output_path=None):
     ]
 
     subprocess.run(cmd, stderr=subprocess.PIPE)
+    print(f"⏱️  extract_mp3_from_video completed in {time.time() - start_time:.2f}s")
+
 
 def transcribe_audio_whisper(audio_filepath, model_size="medium", language="en", initial_prompt=None, save_path=None):
     """
@@ -200,6 +172,8 @@ def transcribe_audio_whisper(audio_filepath, model_size="medium", language="en",
       { "text": <full transcript>,
         "segments": [ {id, start, end, text}, ... ] }
     """
+    start_time = time.time()
+    
     if not os.path.isfile(audio_filepath):
         raise FileNotFoundError(f"Audio file not found: {audio_filepath}")
 
@@ -234,12 +208,13 @@ def transcribe_audio_whisper(audio_filepath, model_size="medium", language="en",
         with open(save_path, "w", encoding="utf-8") as f:
             json.dump(clean, f, ensure_ascii=False, indent=2)
         print(f"Transcript JSON saved to: {save_path}")
-
+    
+    print(f"⏱️  transcribe_audio_whisper completed in {time.time() - start_time:.2f}s")
     return clean
 
 
 def video_processing_pipeline(
-    path: str,
+    video_path: str,
     apply_convert: bool = True,
     apply_extract_audio: bool = True,
     apply_transcribe: bool = True,
@@ -259,7 +234,7 @@ def video_processing_pipeline(
       3. Transcribe audio with Whisper
 
     Parameters:
-        path (str): Path to the input video file or video folder path with single video file.
+        video_path (str): Path to the input video file.
         apply_convert (bool): Whether to convert video to H.264.
         apply_extract_audio (bool): Whether to extract audio as MP3.
         apply_transcribe (bool): Whether to run Whisper transcription.
@@ -274,7 +249,8 @@ def video_processing_pipeline(
     Returns:
         dict | None: Transcription result if `apply_transcribe` is True, else None.
     """
-    video_path = helper.get_video_path(path)
+    pipeline_start = time.time()
+    
     if create_subject_folder:
         filename_no_ext = os.path.splitext(os.path.basename(video_path))[0]
         output_dir = os.path.join(output_dir, filename_no_ext)
@@ -313,46 +289,28 @@ def video_processing_pipeline(
         print("\n[STEP 3] Transcribing audio...")
         transcribe_audio_whisper(audio_path, model_size=whisper_model, save_path=json_path)
         print("[OK] Transcription completed.")
+    
+    print(f"\n⏱️  video_processing_pipeline completed in {time.time() - pipeline_start:.2f}s")
+
 
 
 if __name__ == "__main__":
-    helper = Helper()
+
+    # Configure file and directory paths
+    video_path = "output/web_vpp/v7158/Video_2550_7158_testing.mp4"
+
+    # get_video_info(video_path)
     
-    # --- Configure Paths ---
-    root_videos_dir = "data/videos"
-    dataset = "LPM_Dataset"                               # "M3AV_Dataset" | "VISTA_Dataset" | "YouTubes" | "LPM_Dataset"
-    root_output_dir = "output/modality_extraction"
-
-    # Setting up directories
-    dataset_path = os.path.join(root_videos_dir, dataset)
-    output_dir = os.path.join(root_output_dir, dataset)
-    os.makedirs(output_dir, exist_ok=True)
 
 
-    # Get list of video folders to process
-    selected_videos_json = os.path.join(dataset_path, f"selected_videos_{dataset.lower()}.json")
-    video_list = helper.read_from_json(selected_videos_json)
-    print(f"Total {len(video_list)} video folders to process: \n{video_list}")
-
-    start_time = time.time()
-
-    for idx, video_folder in enumerate(video_list):
-        # video_folder = "CMU_MML_L2"  # For testing single video [also uncomment break]; comment this line to process all videos
-        print(f"\n\n[{idx+1}/{len(video_list)}] Processing video folder: {video_folder}")
-        video_folderpath = os.path.join(dataset_path, video_folder)
-        # get_video_info(video_folderpath)
-
-        video_processing_pipeline(
-            video_folderpath, apply_convert=True, 
-            apply_extract_audio=True, 
-            apply_transcribe=True, 
-            skip_convert_on_existing=True,
-            fps=10, 
-            target_height=720, 
-            whisper_model='small',
-            output_dir=os.path.join(output_dir, video_folder),
-        )
-        break  # Remove this break to process all videos
-
-
-    print(f"\n✅ All steps completed in {time.time() - start_time:.2f} seconds.")
+    video_processing_pipeline(
+        video_path, 
+        apply_convert=True, 
+        apply_extract_audio=True, 
+        apply_transcribe=True, 
+        skip_convert_on_existing=True,
+        fps=10, 
+        target_height=720, 
+        whisper_model='small',
+        output_dir=os.path.dirname(video_path)
+    )

@@ -50,19 +50,6 @@ class Helper:
         except Exception as e:
             print(f"Error writing to pickle file {file_path}: {e}")
 
-
-    @staticmethod
-    def get_video_path(path: str) -> str:
-        """Return a video path from file or folder; raise if none/multiple found."""
-        if os.path.isfile(path):
-            return path
-        if os.path.isdir(path):
-            vids = [f for f in os.listdir(path) if f.lower().endswith((".mp4",".avi",".mov",".mkv"))]
-            if len(vids) == 1: return os.path.join(path, vids[0])
-            if not vids: raise FileNotFoundError(f"No videos in {path}")
-            raise ValueError(f"Multiple videos in {path}")
-        raise FileNotFoundError(f"Path not found: {path}")
-
     @staticmethod
     def get_immediate_folder_name(path):
         """Returns the immediate folder name from a given file or directory path.

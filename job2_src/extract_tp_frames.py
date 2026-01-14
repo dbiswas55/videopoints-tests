@@ -408,7 +408,7 @@ def build_joint_mask_window(manual_files, auto_files, m_idx, a_idx, slides_manua
 # --- Main Pipeline Steps ---
 
 def step1_basic_filter(
-    video_folder, 
+    video_path, 
     root_output_dir=None, 
     processing_fps=2, 
     speaker_mask_window_size=11, 
@@ -427,7 +427,7 @@ def step1_basic_filter(
     and 'temp_step1_masks'.
 
     Args:
-        video_folder (str): Path to the video folder.
+        video_path (str): Path to the video file.
         root_output_dir (str): Root directory for outputs (default = video_folder).
         processing_fps (int): Frame sampling rate.
         speaker_mask_window_size (int): Window size (odd) for mask estimation.
@@ -436,9 +436,10 @@ def step1_basic_filter(
         manual_slide_bbox (tuple[int,int,int,int] | None): Median Bounding Box (x, y, w, h) defining the slide area.
         skip_on_existing (bool): Skip if outputs already exist.
     """
-    video_path = helper.get_video_path(video_folder)
+    start_time = time.time()
+    
     if root_output_dir is None:
-        root_output_dir = video_folder
+        root_output_dir = os.path.dirname(video_path)
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -454,7 +455,7 @@ def step1_basic_filter(
     step1_masks_folder = os.path.join(root_output_dir, "temp", "temp_step1_masks")
 
     if skip_on_existing and os.path.exists(step1_candidates_folder) and os.path.exists(step1_masks_folder):
-        print(f"Step 1 output already exists. Skipping processing for {video_folder}.")
+        print(f"Step 1 output already exists. Skipping processing for {root_output_dir}.")
         return
 
     # Clean and recreate output folders
@@ -540,9 +541,10 @@ def step1_basic_filter(
     print(f"\nStep 1 complete. Found {candidate_count} candidate frames.")
 
     helper.write_to_json(diff_scores, os.path.join(step1_candidates_folder, "mse_diff_scores.json"))
+    print(f"⏱️  step1_basic_filter completed in {time.time() - start_time:.2f}s")
 
 def step2_transition_filter(
-    video_folder,
+    video_path: str,
     root_output_dir=None,
     uniqueness_threshold=50,
     manual_slide_bbox=None,
@@ -562,14 +564,16 @@ def step2_transition_filter(
     'temp_step2_masks'.
 
     Args:
-        video_folder (str): Path to the video folder.
-        root_output_dir (str): Root directory for outputs (default = video_folder).
+        video_path (str): Path to the video file.
+        root_output_dir (str): Root directory for outputs (default = directory of video_path).
         uniqueness_threshold (int): Minimum edge-diff score for uniqueness.
         manual_slide_bbox (tuple[int,int,int,int] | None): Median Bounding Box (x, y, w, h) defining the slide area.
         skip_on_existing (bool): Skip if outputs already exist.
     """
+    start_time = time.time()
+    
     if root_output_dir is None:
-        root_output_dir = video_folder
+        root_output_dir = os.path.dirname(video_path)
 
     # Define input and output folders
     step1_candidates_folder = os.path.join(root_output_dir, "temp", "temp_step1_candidates")
@@ -578,7 +582,7 @@ def step2_transition_filter(
     step2_masks_folder = os.path.join(root_output_dir, "temp", "temp_step2_masks")
 
     if skip_on_existing and os.path.exists(step2_candidates_folder) and os.path.exists(step2_masks_folder):
-        print(f"Step 2 output already exists. Skipping processing for {video_folder}.")
+        print(f"Step 2 output already exists. Skipping processing for {root_output_dir}.")
         return
     
     # Clean and recreate output folders
@@ -643,9 +647,10 @@ def step2_transition_filter(
     print("Copying files to final destination folder...")
     final_dest_folder = os.path.join(root_output_dir, "slides")
     copy_all_files(step2_candidates_folder, final_dest_folder)
+    print(f"⏱️  step2_transition_filter completed in {time.time() - start_time:.2f}s")
 
 def step3_filter_with_sliding_window(
-    video_folder: str,
+    video_path: str,
     root_output_dir: str = None,
     window_size: int = 10,
     mse_threshold: int = 50,
@@ -659,8 +664,8 @@ def step3_filter_with_sliding_window(
     'temp_step3_candidates' and copied to 'slides' for final use.
 
     Args:
-        video_folder (str): Path to the video folder.
-        root_output_dir (str): Root directory for outputs (default = video_folder).
+        video_path (str): Path to the video file.
+        root_output_dir (str): Root directory for outputs (default = directory of video_path).
         window_size (int): Number of past frames to compare against.
         mse_threshold (int): MSE threshold for uniqueness.
         skip_on_existing (bool): Skip if outputs already exist.
@@ -668,8 +673,10 @@ def step3_filter_with_sliding_window(
     Returns:
         list[str]: Filenames of final unique frames.
     """
+    start_time = time.time()
+    
     if root_output_dir is None:
-        root_output_dir = video_folder
+        root_output_dir = os.path.dirname(video_path)
 
     # 1. Define input and output folders
     input_image_folder = os.path.join(root_output_dir, "temp", "temp_step2_candidates")
@@ -677,7 +684,7 @@ def step3_filter_with_sliding_window(
     temp_step3_candidates = os.path.join(root_output_dir, "temp", "temp_step3_candidates")
 
     if skip_on_existing and os.path.exists(temp_step3_candidates):
-        print(f"Step 3 output already exists. Skipping processing for {video_folder}.")
+        print(f"Step 3 output already exists. Skipping processing for {root_output_dir}.")
         return
     
     # Clean and recreate output folders
@@ -745,161 +752,36 @@ def step3_filter_with_sliding_window(
     print("Copying final unique slides to destination folder...")
     final_dest_folder = os.path.join(root_output_dir, "slides")
     copy_all_files(temp_step3_candidates, final_dest_folder)
+    print(f"⏱️  step3_filter_with_sliding_window completed in {time.time() - start_time:.2f}s")
 
-
-def find_similar_and_unique_slides(slides_manual, slides_auto, root_output,
-                              mse_threshold=200, mask_window=12, search_window=10, clean_output=True):
-    """
-    Compare slide images from two folders (manual vs auto) and classify them into:
-      - Similar slides
-      - Unique to manual
-      - Unique to auto
-
-    Args:
-        slides_manual (str): Path to manual slides folder.
-        slides_auto (str): Path to auto slides folder.
-        root_output (str): Path to save results.
-        mse_threshold (float): Threshold for MSE below which slides are considered similar.
-        mask_window (int): Number of frames used for mask computation (split half from each folder).
-        search_window (int): Number of forward frames to search in the opposite folder for matches.
-    """
-    if clean_output and os.path.exists(root_output): shutil.rmtree(root_output)
-    
-    # --- Prepare output directories ---
-    similar_dir = os.path.join(root_output, "similar")
-    unique_manual_dir = os.path.join(root_output, "unique_manual")
-    mask_output_dir = os.path.join(root_output, "masks_manual")
-    unique_auto_dir = os.path.join(root_output, "unique_auto")
-    os.makedirs(similar_dir, exist_ok=True)
-    os.makedirs(unique_manual_dir, exist_ok=True)
-    os.makedirs(mask_output_dir, exist_ok=True)
-    os.makedirs(unique_auto_dir, exist_ok=True)
-
-    # --- Load and sort filenames ---
-    manual_files = sorted([f for f in os.listdir(slides_manual) if f.endswith((".png", ".jpg"))])
-    auto_files = sorted([f for f in os.listdir(slides_auto) if f.endswith((".png", ".jpg"))])
-
-    idx_manual, idx_auto = 0, 0
-    matched_auto_indices = set()
-
-    # --- Iterate through manual slides ---
-    while idx_manual < len(manual_files):
-        manual_path = os.path.join(slides_manual, manual_files[idx_manual])
-        manual_bgr = cv2.imread(manual_path)
-
-        found_match = False
-        # --- Search for a match in auto slides within search_window ---
-        for j in range(idx_auto, min(idx_auto + search_window, len(auto_files))):
-            auto_path = os.path.join(slides_auto, auto_files[j])
-            auto_bgr = cv2.imread(auto_path)
-
-            # Skip if auto frame cannot be read
-            if auto_bgr is None:
-                continue
-
-            # --- Resize manual frame to auto frame resolution ---
-            H, W = auto_bgr.shape[:2]
-            manual_resized = cv2.resize(manual_bgr, (W, H), interpolation=cv2.INTER_AREA)
-
-            # Convert to grayscale
-            manual_gray = cv2.cvtColor(manual_resized, cv2.COLOR_BGR2GRAY)
-            auto_gray = cv2.cvtColor(auto_bgr, cv2.COLOR_BGR2GRAY)
-
-            # --- Build speaker mask from context frames (6 manual + 6 auto) ---
-            manual_range = manual_files[max(0, idx_manual-5): min(len(manual_files), idx_manual+6)]
-            auto_range = auto_files[max(0, j-5): min(len(auto_files), j+6)]
-            manual_stack = [cv2.cvtColor(cv2.resize(cv2.imread(os.path.join(slides_manual, f)), (W, H)), cv2.COLOR_BGR2GRAY)
-                            for f in manual_range if cv2.imread(os.path.join(slides_manual, f)) is not None]
-            auto_stack = [cv2.cvtColor(cv2.imread(os.path.join(slides_auto, f)), cv2.COLOR_BGR2GRAY)
-                          for f in auto_range if cv2.imread(os.path.join(slides_auto, f)) is not None]
-
-            # Combine half manual + half auto frames
-            mask_frames = manual_stack[:mask_window//2] + auto_stack[:mask_window//2]
-            mask = get_speaker_mask(mask_frames)
-            # 🔥 Save mask aligned with manual slide
-            if mask is not None:
-                mask_output_dir = os.path.join(root_output, "masks_manual")
-                os.makedirs(mask_output_dir, exist_ok=True)
-                mask_filename = f"mask_{manual_files[idx_manual]}"
-                cv2.imwrite(os.path.join(mask_output_dir, mask_filename), mask)
-
-            # --- Compare frames with mask ---
-            score = step1_compare_frames(manual_gray, auto_gray, mask=mask)
-            if score < mse_threshold:  # Found a match
-                found_match = True
-                matched_auto_indices.add(j)
-                # Save into similar folder
-                cv2.imwrite(os.path.join(similar_dir, auto_files[j]), auto_bgr)
-                idx_auto = j + 1  # Update auto index to last match
-                break
-
-        if not found_match:
-            # No match → save as unique manual (resized to auto resolution)
-            cv2.imwrite(os.path.join(unique_manual_dir, manual_files[idx_manual]), manual_resized)
-
-        idx_manual += 1
-
-    # --- Save remaining unmatched auto slides ---
-    for j in range(len(auto_files)):
-        if j not in matched_auto_indices:
-            auto_path = os.path.join(slides_auto, auto_files[j])
-            auto_bgr = cv2.imread(auto_path)
-            if auto_bgr is not None:
-                cv2.imwrite(os.path.join(unique_auto_dir, auto_files[j]), auto_bgr)
-
-    print("✅ Comparison complete. Results saved to:", root_output)
 
 
 
 # --- Main Execution ---
 if __name__ == "__main__":
     helper = Helper()
+    total_start = time.time()
 
-    # --- Configure Paths ---
-    dataset = "LPM_Dataset"                               # "M3AV_Dataset" | "VISTA_Dataset" | "YouTubes" | "LPM_Dataset"
-    root_processed_dir = "output/modality_extraction"
-
-    # Setting up directories
-    processed_dir = os.path.join(root_processed_dir, dataset)
-
-    # Get list of video folders to process
-    video_list = helper.get_subfolder_names(processed_dir)
-    print(f"Total {len(video_list)} video folders to process: \n{video_list}")
-
-    start_time = time.time()
+    # Configure file and directory paths
+    video_path = "output/web_vpp/v7158/Video_2550_7158_testing_fps10.mp4"
+    
 
 
-    for idx, video_folder in enumerate(video_list):
-    # for idx, video_folder in enumerate(["ml1_1", "ml1_2", "ml1_3", "ml1_4", "ml1_5"]):
-        # video_folder = "ml1_1"  # For testing single video [also uncomment break]; comment this line to process all videos
-        print(f"\n\n[{idx+1}/{len(video_list)}] Processing video folder: {video_folder}")
-        video_folderpath = os.path.join(processed_dir, video_folder)
 
-        # Run the pipeline steps
-        step1_basic_filter(video_folderpath, processing_fps=2, enable_masking=True, speaker_mask_window_size=13, mse_threshold=50, manual_slide_bbox=None, skip_on_existing=True)
-        
-        # # Optional: If you want to find and hack a bounding box mask for slide area
-        # step1_candidates_folder = os.path.join(video_folderpath, "temp", "temp_step1_candidates")
-        # slide_boundary = calculate_median_slide_bounding_box(step1_candidates_folder, num_images_to_process=200)
-        # # CMU_MML_L1: (0, 91, 963, 539); CMU_MML_L2: (0, 91, 963, 536)
-        # # MIT_DL_L1: (0, 64, 1043, 592)
-        # # ml1_1, ml1_2, ml1_4, ml1_5: (0, 0, 962, 720)  # Issue with ml1_3 (small slide region)
-        # # bio1_1: (157, 0, 917, 720); bio1_2: (156, 0, 965, 720)
-
-        step2_transition_filter(video_folderpath, uniqueness_threshold=50, manual_slide_bbox=None, skip_on_existing=True)
-        step3_filter_with_sliding_window(video_folderpath, window_size=20, mse_threshold=50, skip_on_existing=True)
-        
-        break  # Remove this break to process all videos
+    # Run the pipeline steps
+    step1_basic_filter(video_path, processing_fps=2, enable_masking=True, speaker_mask_window_size=13, mse_threshold=50, manual_slide_bbox=None, skip_on_existing=True)
+    
+    # # Optional: If you want to find and hack a bounding box mask for slide area
+    # step1_candidates_folder = os.path.join(video_path, "temp", "temp_step1_candidates")
+    # slide_boundary = calculate_median_slide_bounding_box(step1_candidates_folder, num_images_to_process=200)
 
 
-    # # un-finished
-    # slides_manual = "/Volumes/Works/Projects/LPMDataset/dataset/videos/ml-1/VIq5r7mCAyw"
-    # slides_auto = "/Volumes/Works/Projects/video-to-lecture-slides/experiments/output/extracted_modalities/ml1_L1_1_fps10/slides"
-    # output = "/Volumes/Works/Projects/video-to-lecture-slides/experiments/output/extracted_modalities/ml1_L1_1_fps10/temp"
-    # find_similar_and_unique_slides(slides_manual, slides_auto, root_output= output, mse_threshold=50, mask_window=12, search_window=10)
+    step2_transition_filter(video_path, uniqueness_threshold=50, manual_slide_bbox=None, skip_on_existing=True)
+    
+    step3_filter_with_sliding_window(video_path, window_size=20, mse_threshold=50, skip_on_existing=True)
+ 
 
-    end_time = time.time()
-    print(f"\n✅ All steps completed in {end_time - start_time:.2f} seconds.")
+    print(f"\n✅ All steps completed in {time.time() - total_start:.2f} seconds.")
 
 
 
