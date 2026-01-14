@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+venv*/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+
+# Files and Directory
+input/videos/
+output/
