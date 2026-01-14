@@ -132,7 +132,7 @@ if __name__ == "__main__":
     helper = Helper()
 
     # Configure file and directory paths
-    video_path = "output/web_vpp/v7158/Video_2550_7158_testing.mp4"
+    video_path = "output/web_vpp/v8020/BIOL2301_lecture05_0609_8020.mp4"
     video_dir = os.path.dirname(video_path)
 
 

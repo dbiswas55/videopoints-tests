@@ -763,13 +763,13 @@ if __name__ == "__main__":
     total_start = time.time()
 
     # Configure file and directory paths
-    video_path = "output/web_vpp/v7158/Video_2550_7158_testing_fps10.mp4"
+    video_path = "output/web_vpp/v8020/BIOL2301_lecture05_0609_8020_fps10.mp4"
     
 
 
 
     # Run the pipeline steps
-    step1_basic_filter(video_path, processing_fps=2, enable_masking=True, speaker_mask_window_size=13, mse_threshold=50, manual_slide_bbox=None, skip_on_existing=True)
+    step1_basic_filter(video_path, processing_fps=1, enable_masking=True, speaker_mask_window_size=13, mse_threshold=50, manual_slide_bbox=None, skip_on_existing=True)
     
     # # Optional: If you want to find and hack a bounding box mask for slide area
     # step1_candidates_folder = os.path.join(video_path, "temp", "temp_step1_candidates")
